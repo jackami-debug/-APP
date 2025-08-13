@@ -30,6 +30,9 @@ class EnergyMonitorService(private val context: Context) {
     // 追蹤每個 App 的累積使用時間（分鐘）
     private val appAccumulatedMinutes = ConcurrentHashMap<String, AtomicLong>()
     
+    // 追蹤每個 App 的累積使用時間（秒）
+    private val appAccumulatedSeconds = ConcurrentHashMap<String, AtomicLong>()
+    
     // 快取習慣 App 配置，避免重複查詢資料庫
     private val habitAppsCache = MutableStateFlow<List<GoodHabitApp>>(emptyList())
     private val packageToHabitCache = MutableStateFlow<Map<String, GoodHabitApp>>(emptyMap())
@@ -51,9 +54,10 @@ class EnergyMonitorService(private val context: Context) {
     companion object {
         private const val MONITORING_INTERVAL = 1000L // 改為每1秒檢查一次，提高即時性
         private const val MAX_ENERGY = 180
-        private const val ENERGY_DEDUCTION_PER_SECOND = 0.0167 // 每1秒扣除0.0167點，每分鐘仍然是1點
+        private const val ENERGY_DEDUCTION_PER_MINUTE = 1 // 每分鐘扣除1點能量
         private const val LOG_INTERVAL_MINUTES = 10 // 每10分鐘記錄一次
         private const val MIN_LOG_MINUTES = 5 // 最少5分鐘才記錄
+        private const val SECONDS_PER_MINUTE = 60 // 每60秒為1分鐘
     }
     
     init {
@@ -134,16 +138,22 @@ class EnergyMonitorService(private val context: Context) {
             // 更新該 App 的使用時間
             appUsageTime.getOrPut(currentApp) { AtomicLong(0) }.addAndGet(MONITORING_INTERVAL)
             
-            // 累積使用時間（分鐘）
-            val accumulatedMinutes = appAccumulatedMinutes.getOrPut(currentApp) { AtomicLong(0) }
-            accumulatedMinutes.addAndGet(1)
+            // 累積使用時間（秒）
+            val accumulatedSeconds = appAccumulatedSeconds.getOrPut(currentApp) { AtomicLong(0) }
+            val newSeconds = accumulatedSeconds.addAndGet(1)
             
-            // 檢查是否為壞習慣 App 並扣除能量
-            checkAndDeductEnergy(currentApp)
-            
-            // 每10分鐘記錄一次使用日誌
-            if (accumulatedMinutes.get() % LOG_INTERVAL_MINUTES == 0L) {
-                recordUsageLog(currentApp, LOG_INTERVAL_MINUTES.toInt())
+            // 每60秒增加1分鐘
+            if (newSeconds % SECONDS_PER_MINUTE == 0L) {
+                val accumulatedMinutes = appAccumulatedMinutes.getOrPut(currentApp) { AtomicLong(0) }
+                accumulatedMinutes.addAndGet(1)
+                
+                // 每10分鐘記錄一次使用日誌
+                if (accumulatedMinutes.get() % LOG_INTERVAL_MINUTES == 0L) {
+                    recordUsageLog(currentApp, LOG_INTERVAL_MINUTES.toInt())
+                }
+                
+                // 每分鐘檢查一次能量扣除（只在每分鐘整點時扣除）
+                checkAndDeductEnergy(currentApp)
             }
         }
     }
@@ -167,17 +177,16 @@ class EnergyMonitorService(private val context: Context) {
         val habitApp = packageToHabitCache.value[packageName]
         
         if (habitApp?.isBadHabit == true) {
-            // 壞習慣 App，扣除能量
-            val energyToDeduct = ENERGY_DEDUCTION_PER_SECOND
+            // 壞習慣 App，扣除能量（每分鐘扣除1點）
+            val energyToDeduct = ENERGY_DEDUCTION_PER_MINUTE
             val currentEnergyValue = _currentEnergy.value
-            val newEnergy = maxOf(0.0, currentEnergyValue - energyToDeduct)
-            val newEnergyInt = newEnergy.toInt()
-            _currentEnergy.value = newEnergyInt
+            val newEnergy = maxOf(0, currentEnergyValue - energyToDeduct)
+            _currentEnergy.value = newEnergy
             
-            android.util.Log.d("EnergyMonitor", "壞習慣 App: $packageName, 扣除能量: $energyToDeduct, 當前能量: $newEnergyInt")
+            android.util.Log.d("EnergyMonitor", "壞習慣 App: $packageName, 扣除能量: $energyToDeduct, 當前能量: $newEnergy")
             
-            // 能量歸零檢測 - 這是關鍵改進！
-            if (newEnergyInt <= 0 && currentEnergyValue > 0) {
+            // 能量歸零檢測
+            if (newEnergy <= 0 && currentEnergyValue > 0) {
                 android.util.Log.d("EnergyMonitor", "能量歸零，立即阻止當前壞習慣 App: $packageName")
                 // 立即阻止當前正在使用的壞習慣 App
                 immediatelyBlockCurrentApp(packageName)
@@ -291,6 +300,7 @@ class EnergyMonitorService(private val context: Context) {
     fun clearUsageTime() {
         appUsageTime.clear()
         appAccumulatedMinutes.clear()
+        appAccumulatedSeconds.clear()
     }
     
     private suspend fun recordRemainingUsage() {
@@ -304,6 +314,7 @@ class EnergyMonitorService(private val context: Context) {
             
             // 清空累積記錄
             appAccumulatedMinutes.clear()
+            appAccumulatedSeconds.clear()
         } catch (e: Exception) {
             android.util.Log.e("EnergyMonitor", "記錄剩餘使用時間時出錯", e)
         }
@@ -312,6 +323,7 @@ class EnergyMonitorService(private val context: Context) {
     suspend fun recordAppSwitch(packageName: String) {
         try {
             val accumulatedMinutes = appAccumulatedMinutes[packageName]
+            val accumulatedSeconds = appAccumulatedSeconds[packageName]
             
             if (accumulatedMinutes != null && accumulatedMinutes.get() > 0) {
                 // 記錄當前累積的使用時間（如果超過5分鐘才記錄）
@@ -319,6 +331,7 @@ class EnergyMonitorService(private val context: Context) {
                     recordUsageLog(packageName, accumulatedMinutes.get().toInt())
                     // 重置累積時間
                     accumulatedMinutes.set(0)
+                    accumulatedSeconds?.set(0)
                 }
             }
         } catch (e: Exception) {
