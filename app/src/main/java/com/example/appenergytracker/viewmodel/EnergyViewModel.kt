@@ -61,7 +61,7 @@ class EnergyViewModel(application: Application) : AndroidViewModel(application) 
         ) { usageLogs, chargeLogs, habitApps ->
             calculateEnergyFromDatabase(usageLogs, chargeLogs, habitApps)
         }.onEach { calculatedEnergy ->
-            // 只在自動監控服務未運行時使用資料庫計算
+            // 當自動監控服務未運行時，或當有新的充電活動時，使用資料庫計算
             if (!energyMonitorService.isMonitoring) {
                 _currentEnergyMinutes.value = calculatedEnergy
                 android.util.Log.d("EnergyViewModel", "使用資料庫備用計算，能量: $calculatedEnergy")
@@ -117,8 +117,15 @@ class EnergyViewModel(application: Application) : AndroidViewModel(application) 
                 appDao.insertChargeLog(log)
                 android.util.Log.d("EnergyViewModel", "已記錄充電活動: $activityType, 時長: ${durationMinutes}分鐘, 比例: $ratio")
                 
-                // 重新載入 EnergyMonitorService 的能量狀態，確保 UI 更新
-                energyMonitorService.loadCurrentEnergy()
+                // 直接更新 EnergyMonitorService 的能量狀態
+                val currentEnergy = energyMonitorService.currentEnergy.value
+                val energyToAdd = (durationMinutes * ratio).toInt()
+                val newEnergy = min(_maxEnergyMinutes.value, currentEnergy + energyToAdd)
+                
+                // 直接設置 EnergyMonitorService 的能量值
+                energyMonitorService.setCurrentEnergy(newEnergy)
+                
+                android.util.Log.d("EnergyViewModel", "直接更新 EnergyMonitorService 能量: $currentEnergy + $energyToAdd = $newEnergy")
             }
         } catch (e: Exception) {
             android.util.Log.e("EnergyViewModel", "記錄充電活動時出錯", e)

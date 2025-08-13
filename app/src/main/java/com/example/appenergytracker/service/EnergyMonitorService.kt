@@ -350,6 +350,13 @@ class EnergyMonitorService(private val context: Context) {
         android.util.Log.d("EnergyMonitor", "重置能量為: $maxEnergy")
     }
     
+    // 設置當前能量值
+    fun setCurrentEnergy(energy: Int) {
+        val clampedEnergy = maxOf(0, minOf(MAX_ENERGY, energy))
+        _currentEnergy.value = clampedEnergy
+        android.util.Log.d("EnergyMonitor", "設置當前能量為: $clampedEnergy")
+    }
+    
     fun destroy() {
         stopMonitoring()
         scope.cancel()
