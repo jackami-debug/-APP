@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">AppEnergyTracker</string>
+    <string name="accessibility_service_description">用於監控和阻止壞習慣 App 的使用，當能量歸零時會自動鎖定壞習慣 App</string>
 </resources>

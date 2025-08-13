@@ -34,10 +34,10 @@ class UsageStatsRepository(private val context: Context) {
         }
 
         val perPackageMinutes: Map<String, Int> = stats
-            .filter { it.totalTimeInForeground > 0 }
-            .groupBy { it.packageName }
+            .filter { stats -> stats.totalTimeInForeground > 0 }
+            .groupBy { stats -> stats.packageName }
             .mapValues { entry ->
-                val totalMs = entry.value.sumOf { it.totalTimeInForeground }
+                val totalMs = entry.value.sumOf { stats -> stats.totalTimeInForeground }
                 (totalMs / 1000L / 60L).toInt()
             }
             .filterValues { it > 0 }

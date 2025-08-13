@@ -15,6 +15,8 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.text.input.KeyboardType
 import com.example.appenergytracker.model.GoodHabitApp
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Add
 
 @Composable
 fun GoodHabitAppItem(
