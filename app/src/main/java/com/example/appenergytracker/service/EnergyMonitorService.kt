@@ -152,7 +152,7 @@ class EnergyMonitorService(private val context: Context) {
                     recordUsageLog(currentApp, LOG_INTERVAL_MINUTES.toInt())
                 }
                 
-                // 每分鐘檢查一次能量扣除（只在每分鐘整點時扣除）
+                // 每分鐘扣除一次能量（確保精確的1:1比例）
                 checkAndDeductEnergy(currentApp)
             }
         }

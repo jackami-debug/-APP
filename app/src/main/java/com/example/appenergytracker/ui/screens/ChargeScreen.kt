@@ -135,7 +135,7 @@ fun ChargeScreen(navController: NavController) {
                                 // 執行免費充能
                                 energyViewModel.insertCharge(
                                     activityType = "免費充能",
-                                    durationMinutes = 1,
+                                    durationMinutes = 10,
                                     ratio = 1.0f
                                 )
                                 
