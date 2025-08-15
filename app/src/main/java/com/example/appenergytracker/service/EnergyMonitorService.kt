@@ -16,15 +16,17 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.collectLatest
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
+
 
 class EnergyMonitorService(private val context: Context) {
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private val appDao = AppDatabase.getDatabase(context).appDao()
     private val goodHabitDao = AppDatabase.getDatabase(context).goodHabitDao()
-    
-    // 追蹤每個 App 的使用時間（毫秒）
+ 
+      // 追蹤每個 App 的使用時間（毫秒）
     private val appUsageTime = ConcurrentHashMap<String, AtomicLong>()
     
     // 追蹤每個 App 的累積使用時間（分鐘）
@@ -40,7 +42,9 @@ class EnergyMonitorService(private val context: Context) {
     // 當前能量狀態
     private val _currentEnergy = MutableStateFlow(0)
     val currentEnergy: StateFlow<Int> = _currentEnergy.asStateFlow()
-    
+
+    // 新增：好習慣加能小數殘值累積（支援 ratio < 1 的逐分鐘累積）
+    private val goodHabitEnergyResidue = ConcurrentHashMap<String, Double>()
     // 監控狀態
     var isMonitoring = false
         private set
@@ -75,6 +79,19 @@ class EnergyMonitorService(private val context: Context) {
             habitAppsCache.value = habitApps
             packageToHabitCache.value = habitApps.associateBy { it.packageName }
             android.util.Log.d("EnergyMonitor", "已載入 ${habitApps.size} 個習慣 App 配置")
+
+            // 背景持續收聽資料變更，保持快取即時
+            scope.launch {
+                try {
+                    goodHabitDao.getAllGoodHabitApps().collectLatest { updated ->
+                        habitAppsCache.value = updated
+                        packageToHabitCache.value = updated.associateBy { it.packageName }
+                        android.util.Log.d("EnergyMonitor", "已更新習慣 App 配置：${updated.size} 筆")
+                    }
+                } catch (e: Exception) {
+                    android.util.Log.e("EnergyMonitor", "持續收聽習慣 App 配置時出錯", e)
+                }
+            }
         } catch (e: Exception) {
             android.util.Log.e("EnergyMonitor", "載入習慣 App 配置時出錯", e)
         }
@@ -192,13 +209,23 @@ class EnergyMonitorService(private val context: Context) {
                 immediatelyBlockCurrentApp(packageName)
             }
         } else if (habitApp?.isGoodHabit == true) {
-            // 好習慣 App，增加能量
-            val energyToAdd = habitApp.ratio.toInt()
-            val currentEnergyValue = _currentEnergy.value
-            val newEnergy = minOf(MAX_ENERGY, currentEnergyValue + energyToAdd)
-            _currentEnergy.value = newEnergy
-            
-            android.util.Log.d("EnergyMonitor", "好習慣 App: $packageName, 增加能量: $energyToAdd, 當前能量: $newEnergy")
+            // 好習慣：以小數殘值逐分鐘累積，避免 ratio < 1 被截斷為 0
+            val ratio = habitApp.ratio.toDouble()
+            val residue = (goodHabitEnergyResidue[packageName] ?: 0.0) + ratio
+            val gain = kotlin.math.floor(residue).toInt()
+            goodHabitEnergyResidue[packageName] = residue - gain
+
+            if (gain > 0) {
+                val currentEnergyValue = _currentEnergy.value
+                val newEnergy = minOf(MAX_ENERGY, currentEnergyValue + gain)
+                _currentEnergy.value = newEnergy
+                android.util.Log.d(
+                    "EnergyMonitor",
+                    "好習慣 App: $packageName, 增加能量: $gain (ratio=$ratio, residue=${goodHabitEnergyResidue[packageName]}), 當前能量: $newEnergy"
+                )
+            } else {
+                android.util.Log.d("EnergyMonitor", "好習慣 App: $packageName, 累積中 (ratio=$ratio, residue=$residue)")
+            }
         }
     }
     
