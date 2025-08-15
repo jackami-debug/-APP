@@ -48,14 +48,16 @@ fun HistoryScreen(navController: NavController) {
     var charges by remember { mutableStateOf(emptyList<com.example.appenergytracker.data.entity.ChargeLog>()) }
     val goodHabitApps by viewModel.goodHabitApps.collectAsState()
     val today = remember { DateUtils.today() }
+    var selectedDate by remember { mutableStateOf(today) }
+    var earliestDate by remember { mutableStateOf<String?>(null) }
     
     // App 圖示快取
     val appIcons = remember { mutableStateMapOf<String, ImageBitmap?>() }
 
-    LaunchedEffect(today) {
+    LaunchedEffect(selectedDate) {
         combine(
-            dao.getUsageLogsByDate(today),
-            dao.getChargeLogsByDate(today)
+            dao.getUsageLogsByDate(selectedDate),
+            dao.getChargeLogsByDate(selectedDate)
         ) { u, c -> u to c }
             .collectLatest { (u, c) ->
                 usage = u
@@ -63,32 +65,51 @@ fun HistoryScreen(navController: NavController) {
             }
     }
 
-    // 載入 App 圖示
-    LaunchedEffect(usage) {
-        usage.forEach { log ->
-            if (!appIcons.containsKey(log.packageName)) {
-                val icon = runCatching { 
-                    pm.getApplicationIcon(log.packageName).toBitmap().asImageBitmap() 
+    // 取得最早紀錄日期（僅取一次，或當畫面建立時）
+    LaunchedEffect(Unit) {
+        val uMin = runCatching { dao.getEarliestUsageDate() }.getOrNull()
+        val cMin = runCatching { dao.getEarliestChargeDate() }.getOrNull()
+        earliestDate = listOfNotNull(uMin, cMin).minOrNull()
+    }
+
+    // 彙總使用紀錄（同一 App 僅一筆，分鐘數相加）
+    data class UsageAgg(val packageName: String, val appName: String, val minutes: Int)
+    val aggregatedUsage by remember(usage) {
+        mutableStateOf(
+            usage
+                .groupBy { it.packageName }
+                .map { (pkg, logs) ->
+                    val minutes = logs.sumOf { it.usageMinutes }
+                    val name = logs.first().appName
+                    UsageAgg(pkg, name, minutes)
+                }
+        )
+    }
+
+    // 載入 App 圖示（依彙總後的套件清單）
+    LaunchedEffect(aggregatedUsage) {
+        aggregatedUsage.forEach { item ->
+            if (!appIcons.containsKey(item.packageName)) {
+                val icon = runCatching {
+                    pm.getApplicationIcon(item.packageName).toBitmap().asImageBitmap()
                 }.getOrNull()
-                appIcons[log.packageName] = icon
+                appIcons[item.packageName] = icon
             }
         }
     }
 
     // 計算統計數據
-    val totalUsageMinutes = usage.sumOf { log -> log.usageMinutes }
-    val totalChargeMinutes = charges.sumOf { charge -> (charge.durationMinutes * charge.ratio).toInt() }
-    val netEnergy = totalChargeMinutes - totalUsageMinutes
+    val totalUsageMinutes = aggregatedUsage.sumOf { it.minutes }
     
     // 分類統計
-    val goodHabitUsage = usage.filter { log ->
-        goodHabitApps.any { habitApp -> habitApp.packageName == log.packageName && habitApp.isGoodHabit }
+    val goodHabitUsage = aggregatedUsage.filter { item ->
+        goodHabitApps.any { habitApp -> habitApp.packageName == item.packageName && habitApp.isGoodHabit }
     }
-    val badHabitUsage = usage.filter { log ->
-        goodHabitApps.any { habitApp -> habitApp.packageName == log.packageName && habitApp.isBadHabit }
+    val badHabitUsage = aggregatedUsage.filter { item ->
+        goodHabitApps.any { habitApp -> habitApp.packageName == item.packageName && habitApp.isBadHabit }
     }
-    val neutralUsage = usage.filter { log ->
-        goodHabitApps.none { habitApp -> habitApp.packageName == log.packageName }
+    val neutralUsage = aggregatedUsage.filter { item ->
+        goodHabitApps.none { habitApp -> habitApp.packageName == item.packageName }
     }
 
     Scaffold(
@@ -110,52 +131,10 @@ fun HistoryScreen(navController: NavController) {
             verticalArrangement = Arrangement.spacedBy(16.dp),
             contentPadding = PaddingValues(16.dp)
         ) {
-            // 今日概覽卡片
-            item {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
-                ) {
-                    Column(
-                        modifier = Modifier.padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Text(
-                            text = "📈 今日概覽",
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer
-                        )
-                        
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceEvenly
-                        ) {
-                            StatItem(
-                                icon = Icons.Default.Timer,
-                                label = "總使用時間",
-                                value = "${totalUsageMinutes}分鐘",
-                                color = MaterialTheme.colorScheme.error
-                            )
-                            StatItem(
-                                icon = Icons.Default.BatteryChargingFull,
-                                label = "總充能時間",
-                                value = "${totalChargeMinutes}分鐘",
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                            StatItem(
-                                icon = Icons.Default.TrendingUp,
-                                label = "淨能量",
-                                value = "${netEnergy}分鐘",
-                                color = if (netEnergy >= 0) Color(0xFF4CAF50) else Color(0xFFF44336)
-                            )
-                        }
-                    }
-                }
-            }
+            // 已移除「今日概況」卡片
 
             // 使用時間長條圖
-            if (usage.isNotEmpty()) {
+            if (aggregatedUsage.isNotEmpty()) {
                 item {
                     Card(
                         modifier = Modifier.fillMaxWidth()
@@ -164,23 +143,49 @@ fun HistoryScreen(navController: NavController) {
                             modifier = Modifier.padding(16.dp),
                             verticalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
-                            Text(
-                                text = "📊 使用時間統計",
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.Bold
-                            )
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text(
+                                    text = "📊 使用時間統計",
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    IconButton(
+                                        onClick = { selectedDate = DateUtils.addDays(selectedDate, -1) },
+                                        enabled = earliestDate?.let { selectedDate > it } ?: true
+                                    ) {
+                                        Icon(Icons.Default.KeyboardArrowLeft, contentDescription = "前一天")
+                                    }
+                                    Text(
+                                        text = DateUtils.formatWithWeekday(selectedDate),
+                                        fontSize = 14.sp
+                                    )
+                                    IconButton(
+                                        onClick = { selectedDate = DateUtils.addDays(selectedDate, +1) },
+                                        enabled = !DateUtils.isToday(selectedDate)
+                                    ) {
+                                        Icon(Icons.Default.KeyboardArrowRight, contentDescription = "後一天")
+                                    }
+                                }
+                            }
                             
-                            val maxUsage = max(1, usage.maxOfOrNull { log -> log.usageMinutes } ?: 1)
+                            val maxUsage = max(1, aggregatedUsage.maxOfOrNull { it.minutes } ?: 1)
                             
-                            usage.sortedByDescending { log -> log.usageMinutes }.forEach { log ->
+                            aggregatedUsage.sortedByDescending { it.minutes }.forEach { item ->
                                 UsageBarItem(
-                                    appName = log.appName,
-                                    packageName = log.packageName,
-                                    usageMinutes = log.usageMinutes,
+                                    appName = item.appName,
+                                    packageName = item.packageName,
+                                    usageMinutes = item.minutes,
                                     maxUsage = maxUsage,
-                                    icon = appIcons[log.packageName],
-                                    isGoodHabit = goodHabitApps.any { it.packageName == log.packageName && it.isGoodHabit },
-                                    isBadHabit = goodHabitApps.any { it.packageName == log.packageName && it.isBadHabit }
+                                    icon = appIcons[item.packageName],
+                                    isGoodHabit = goodHabitApps.any { it.packageName == item.packageName && it.isGoodHabit },
+                                    isBadHabit = goodHabitApps.any { it.packageName == item.packageName && it.isBadHabit }
                                 )
                             }
                         }
@@ -205,7 +210,7 @@ fun HistoryScreen(navController: NavController) {
                         
                         CategoryStatItem(
                             title = "好習慣 App",
-                            minutes = goodHabitUsage.sumOf { log -> log.usageMinutes },
+                            minutes = goodHabitUsage.sumOf { it.minutes },
                             count = goodHabitUsage.size,
                             color = Color(0xFF4CAF50),
                             icon = Icons.Default.ThumbUp
@@ -213,7 +218,7 @@ fun HistoryScreen(navController: NavController) {
                         
                         CategoryStatItem(
                             title = "壞習慣 App",
-                            minutes = badHabitUsage.sumOf { log -> log.usageMinutes },
+                            minutes = badHabitUsage.sumOf { it.minutes },
                             count = badHabitUsage.size,
                             color = Color(0xFFF44336),
                             icon = Icons.Default.ThumbDown
@@ -221,7 +226,7 @@ fun HistoryScreen(navController: NavController) {
                         
                         CategoryStatItem(
                             title = "一般 App",
-                            minutes = neutralUsage.sumOf { log -> log.usageMinutes },
+                            minutes = (totalUsageMinutes - goodHabitUsage.sumOf { it.minutes } - badHabitUsage.sumOf { it.minutes }).coerceAtLeast(0),
                             count = neutralUsage.size,
                             color = Color(0xFF9E9E9E),
                             icon = Icons.Default.Apps
@@ -261,7 +266,7 @@ fun HistoryScreen(navController: NavController) {
             }
 
             // 空狀態
-            if (usage.isEmpty() && charges.isEmpty()) {
+            if (aggregatedUsage.isEmpty() && charges.isEmpty()) {
                 item {
                     Card(
                         modifier = Modifier.fillMaxWidth()

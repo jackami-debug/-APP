@@ -47,6 +47,9 @@ interface AppDao {
     @Query("DELETE FROM app_usage_log WHERE usageDate = :date")
     suspend fun clearUsageLogsByDate(date: String)
 
+    @Query("SELECT MIN(usageDate) FROM app_usage_log")
+    suspend fun getEarliestUsageDate(): String?
+
     // ----------------------------
     // ChargeLog（充能紀錄）
     // ----------------------------
@@ -59,4 +62,7 @@ interface AppDao {
 
     @Query("DELETE FROM charge_log")
     suspend fun clearAllChargeLogs()
+
+    @Query("SELECT MIN(chargeDate) FROM charge_log")
+    suspend fun getEarliestChargeDate(): String?
 }

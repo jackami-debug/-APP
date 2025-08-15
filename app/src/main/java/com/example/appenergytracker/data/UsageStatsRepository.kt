@@ -38,7 +38,8 @@ class UsageStatsRepository(private val context: Context) {
             .groupBy { stats -> stats.packageName }
             .mapValues { entry ->
                 val totalMs = entry.value.sumOf { stats -> stats.totalTimeInForeground }
-                (totalMs / 1000L / 60L).toInt()
+                // 以分鐘為單位，向上取整，確保>0秒的使用也會記錄為1分鐘
+                ((totalMs + 59_999L) / 60_000L).toInt()
             }
             .filterValues { it > 0 }
 
