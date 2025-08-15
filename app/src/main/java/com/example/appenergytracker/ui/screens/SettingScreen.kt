@@ -30,6 +30,7 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import androidx.core.graphics.drawable.toBitmap
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.compose.runtime.saveable.rememberSaveable
 import com.example.appenergytracker.model.GoodHabitApp
 import com.example.appenergytracker.ui.screens.components.GoodHabitAppItem
 import com.example.appenergytracker.viewmodel.GoodHabitViewModel
@@ -50,8 +51,36 @@ fun SettingScreen() {
     val scope = rememberCoroutineScope()
     val energyViewModel: com.example.appenergytracker.viewmodel.EnergyViewModel = viewModel()
 
+    // 隱藏進階按鈕的解鎖狀態
+    var showAdvancedButtons by rememberSaveable { mutableStateOf(false) }
+    var secretTapCount by remember { mutableStateOf(0) }
+
+    LaunchedEffect(secretTapCount) {
+        if (secretTapCount >= 5) {
+            showAdvancedButtons = true
+            secretTapCount = 0
+        }
+    }
+
     Scaffold(
-        topBar = { TopAppBar(title = { Text("設定") }) },
+        topBar = { 
+            TopAppBar(
+                title = { Text("設定") },
+                actions = {
+                    // 右上角隱形點擊區（連點 5 下解鎖）
+                    Box(
+                        modifier = Modifier
+                            .size(48.dp)
+                            .clickable(
+                                indication = null,
+                                interactionSource = remember { MutableInteractionSource() }
+                            ) {
+                                secretTapCount++
+                            }
+                    ) {}
+                }
+            ) 
+        },
         snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { padding ->
         Column(
@@ -69,101 +98,109 @@ fun SettingScreen() {
                 }
             }
             
-            // 清除歷史記錄按鈕
-            Button(
-                onClick = {
-                    energyViewModel.clearAllHistory()
-                    scope.launch {
-                        snackbarHostState.showSnackbar("已清除所有歷史記錄")
-                    }
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.error
-                )
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Clear,
-                    contentDescription = null
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("清除所有歷史記錄")
+            if (showAdvancedButtons) {
+                // 清除歷史記錄按鈕
+                Button(
+                    onClick = {
+                        energyViewModel.clearAllHistory()
+                        scope.launch {
+                            snackbarHostState.showSnackbar("已清除所有歷史記錄")
+                        }
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.error
+                    )
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Clear,
+                        contentDescription = null
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("清除所有歷史記錄")
+                }
             }
             
             // 重置鎖定狀態按鈕
             val context = LocalContext.current
-            Button(
-                onClick = {
-                    val appLockService = com.example.appenergytracker.service.AppLockService.getInstance(context)
-                    appLockService.resetLockingState()
-                    scope.launch {
-                        snackbarHostState.showSnackbar("已重置鎖定狀態")
-                    }
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.tertiary
-                )
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Refresh,
-                    contentDescription = null
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("重置鎖定狀態")
+            if (showAdvancedButtons) {
+                Button(
+                    onClick = {
+                        val appLockService = com.example.appenergytracker.service.AppLockService.getInstance(context)
+                        appLockService.resetLockingState()
+                        scope.launch {
+                            snackbarHostState.showSnackbar("已重置鎖定狀態")
+                        }
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.tertiary
+                    )
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Refresh,
+                        contentDescription = null
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("重置鎖定狀態")
+                }
             }
             
             // 檢查無障礙服務狀態按鈕
-            Button(
-                onClick = {
-                    val accessibilityService = com.example.appenergytracker.service.AppLockAccessibilityService.getInstance()
-                    val isRunning = accessibilityService?.isServiceRunning() ?: false
-                    val message = if (isRunning) "無障礙服務正在運行" else "無障礙服務未運行"
-                    scope.launch {
-                        snackbarHostState.showSnackbar(message)
-                    }
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.secondary
-                )
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Check,
-                    contentDescription = null
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("檢查無障礙服務狀態")
+            if (showAdvancedButtons) {
+                Button(
+                    onClick = {
+                        val accessibilityService = com.example.appenergytracker.service.AppLockAccessibilityService.getInstance()
+                        val isRunning = accessibilityService?.isServiceRunning() ?: false
+                        val message = if (isRunning) "無障礙服務正在運行" else "無障礙服務未運行"
+                        scope.launch {
+                            snackbarHostState.showSnackbar(message)
+                        }
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.secondary
+                    )
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Check,
+                        contentDescription = null
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("檢查無障礙服務狀態")
+                }
             }
             
             // 檢查 AppLockService 狀態按鈕
-            Button(
-                onClick = {
-                    val appLockService = com.example.appenergytracker.service.AppLockService.getInstance(context)
-                    val status = appLockService.getServiceStatus()
-                    scope.launch {
-                        snackbarHostState.showSnackbar("AppLockService: $status")
-                    }
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.primary
-                )
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Search,
-                    contentDescription = null
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("檢查 AppLockService 狀態")
+            if (showAdvancedButtons) {
+                Button(
+                    onClick = {
+                        val appLockService = com.example.appenergytracker.service.AppLockService.getInstance(context)
+                        val status = appLockService.getServiceStatus()
+                        scope.launch {
+                            snackbarHostState.showSnackbar("AppLockService: $status")
+                        }
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.primary
+                    )
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Search,
+                        contentDescription = null
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("檢查 AppLockService 狀態")
+                }
             }
 
             when (selectedTab) {
