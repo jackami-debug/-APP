@@ -175,7 +175,7 @@ fun ChargeScreen(navController: NavController) {
                             contentDescription = null
                         )
                         Spacer(modifier = Modifier.width(8.dp))
-                                                        Text(if (isFreeChargeLocked) "冷卻中..." else "獲得 1 分鐘能量")
+                                                        Text(if (isFreeChargeLocked) "冷卻中..." else "獲得 10 分鐘能量")
                     }
                 }
             }
