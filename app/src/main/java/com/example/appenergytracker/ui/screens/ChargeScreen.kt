@@ -20,6 +20,8 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.appenergytracker.viewmodel.EnergyViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import androidx.compose.ui.platform.LocalContext
+import android.content.Context
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -36,8 +38,47 @@ fun ChargeScreen(navController: NavController) {
     var freeChargeCooldown by remember { mutableStateOf(0) } // 剩餘冷卻秒數
     var isFreeChargeLocked by remember { mutableStateOf(false) } // 是否鎖定
     var showFreeChargeSuccess by remember { mutableStateOf(false) } // 是否顯示成功訊息
+    var freeChargeExpiry by remember { mutableStateOf(0L) } // 冷卻截止時間（毫秒）
+
+    val context = LocalContext.current
+    val prefs = remember { context.getSharedPreferences("charge_prefs", Context.MODE_PRIVATE) }
 
     val coroutineScope = rememberCoroutineScope()
+
+    // 初次進入頁面時，還原冷卻狀態
+    LaunchedEffect(Unit) {
+        val savedExpiry = prefs.getLong("free_charge_cooldown_until", 0L)
+        freeChargeExpiry = savedExpiry
+        val now = System.currentTimeMillis()
+        val remaining = ((savedExpiry - now) / 1000).toInt()
+        if (remaining > 0) {
+            isFreeChargeLocked = true
+            freeChargeCooldown = remaining
+        } else {
+            isFreeChargeLocked = false
+            freeChargeCooldown = 0
+        }
+    }
+
+    // 根據到期時間每秒刷新剩餘倒數，時間到自動解鎖
+    LaunchedEffect(isFreeChargeLocked, freeChargeExpiry) {
+        if (isFreeChargeLocked && freeChargeExpiry > 0L) {
+            while (true) {
+                val now = System.currentTimeMillis()
+                val remaining = ((freeChargeExpiry - now) / 1000).toInt()
+                if (remaining <= 0) {
+                    isFreeChargeLocked = false
+                    freeChargeCooldown = 0
+                    freeChargeExpiry = 0L
+                    prefs.edit().remove("free_charge_cooldown_until").apply()
+                    break
+                } else {
+                    freeChargeCooldown = remaining
+                }
+                delay(1000)
+            }
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -142,9 +183,11 @@ fun ChargeScreen(navController: NavController) {
                                 // 顯示成功訊息
                                 showFreeChargeSuccess = true
                                 
-                                // 啟動冷卻時間
+                                // 啟動冷卻時間（以到期時間持久化）
                                 isFreeChargeLocked = true
-                                freeChargeCooldown = 15 * 60 // 15分鐘 = 900秒
+                                val expiry = System.currentTimeMillis() + 15 * 60 * 1000
+                                freeChargeExpiry = expiry
+                                prefs.edit().putLong("free_charge_cooldown_until", expiry).apply()
                                 
                                 // 3秒後隱藏成功訊息
                                 coroutineScope.launch {
@@ -152,14 +195,7 @@ fun ChargeScreen(navController: NavController) {
                                     showFreeChargeSuccess = false
                                 }
                                 
-                                // 開始倒數計時
-                                coroutineScope.launch {
-                                    while (freeChargeCooldown > 0) {
-                                        kotlinx.coroutines.delay(1000)
-                                        freeChargeCooldown--
-                                    }
-                                    isFreeChargeLocked = false
-                                }
+                                // 倒數由上方 LaunchedEffect 根據到期時間自動刷新
                             }
                         },
                         enabled = !isFreeChargeLocked,
