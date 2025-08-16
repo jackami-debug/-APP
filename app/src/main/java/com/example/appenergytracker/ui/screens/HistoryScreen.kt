@@ -1,5 +1,6 @@
 package com.example.appenergytracker.ui.screens
 
+import android.content.Intent
 import android.content.pm.PackageManager
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -35,6 +36,39 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import kotlin.math.max
 
+// 已知應排除之系統背景套件（不具統計意義）
+private val DEFAULT_EXCLUDED_PACKAGES = setOf(
+    "com.android.systemui",
+    "com.google.android.gms",
+    // 常見桌面（部分品牌可能會由動態偵測補齊）
+    "com.miui.home",
+    "com.mi.android.globallauncher",
+    "com.google.android.apps.nexuslauncher",
+    "com.sec.android.app.launcher",
+    "net.oneplus.launcher",
+    "com.huawei.android.launcher",
+    "com.coloros.launcher",
+    "com.oppo.launcher",
+    "com.vivo.launcher",
+    "com.android.launcher",
+    "com.android.launcher3",
+    "org.lineageos.trebuchet"
+)
+
+private fun queryLauncherPackages(pm: PackageManager): Set<String> {
+    val intent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
+    return pm.queryIntentActivities(intent, PackageManager.MATCH_DEFAULT_ONLY)
+        .mapNotNull { it.activityInfo?.packageName }
+        .toSet()
+}
+
+private fun formatUsageMinutes(minutes: Int): String {
+    if (minutes < 60) return "${minutes} 分鐘"
+    val hours = minutes / 60
+    val remain = minutes % 60
+    return if (remain == 0) "${hours} 小時" else "${hours} 小時 ${remain} 分鐘"
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HistoryScreen(navController: NavController) {
@@ -43,6 +77,8 @@ fun HistoryScreen(navController: NavController) {
     val viewModel: GoodHabitViewModel = remember { GoodHabitViewModel(context.applicationContext as android.app.Application) }
     val scope = rememberCoroutineScope()
     val pm = remember { context.packageManager }
+    val launcherPackages = remember { queryLauncherPackages(pm) }
+    val excludedPackages = remember { DEFAULT_EXCLUDED_PACKAGES + launcherPackages }
     
     var usage by remember { mutableStateOf(emptyList<com.example.appenergytracker.data.entity.AppUsageLog>()) }
     var charges by remember { mutableStateOf(emptyList<com.example.appenergytracker.data.entity.ChargeLog>()) }
@@ -77,6 +113,7 @@ fun HistoryScreen(navController: NavController) {
     val aggregatedUsage by remember(usage) {
         mutableStateOf(
             usage
+                .filter { it.packageName !in excludedPackages }
                 .groupBy { it.packageName }
                 .map { (pkg, logs) ->
                     val minutes = logs.sumOf { it.usageMinutes }
@@ -400,7 +437,7 @@ private fun UsageBarItem(
                 fontWeight = FontWeight.Medium
             )
             Text(
-                text = "${usageMinutes} 分鐘",
+                text = formatUsageMinutes(usageMinutes),
                 fontSize = 12.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -468,7 +505,7 @@ private fun CategoryStatItem(
         }
         
         Text(
-            text = "${minutes} 分鐘",
+            text = formatUsageMinutes(minutes),
             fontSize = 16.sp,
             fontWeight = FontWeight.Bold,
             color = color
