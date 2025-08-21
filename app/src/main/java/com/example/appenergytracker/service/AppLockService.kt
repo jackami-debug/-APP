@@ -12,6 +12,7 @@ import com.example.appenergytracker.MainActivity
 import com.example.appenergytracker.R
 import com.example.appenergytracker.data.database.AppDatabase
 import com.example.appenergytracker.util.DateUtils
+import com.example.appenergytracker.service.EnergyStatusNotifier
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.collectLatest
@@ -30,6 +31,7 @@ class AppLockService private constructor(private val context: Context) {
         private const val NOTIFICATION_ID = 1001
         private const val INIT_RETRY_COUNT = 10
         private const val INIT_RETRY_DELAY = 500L
+        private const val STATUS_MAX_ENERGY = 180
         private var instance: AppLockService? = null
         
         fun getInstance(context: Context): AppLockService {
@@ -105,6 +107,8 @@ class AppLockService private constructor(private val context: Context) {
                 if (lastEnergyValue != currentEnergy) {
                     lastEnergyValue = currentEnergy
                     checkAndHandleEnergyStatus(currentEnergy)
+                    // 即時更新狀態通知上的能量條
+                    EnergyStatusNotifier.show(context, currentEnergy, STATUS_MAX_ENERGY)
                 }
             }
         }
