@@ -9,8 +9,10 @@ import com.example.appenergytracker.ui.screens.HistoryScreen
 import com.example.appenergytracker.ui.screens.MainScreen
 import com.example.appenergytracker.ui.screens.SettingScreen
 import com.example.appenergytracker.ui.screens.TestScreen
+import com.example.appenergytracker.ui.screens.PasswordScreen
 
 object Routes {
+    const val PASSWORD = "password"
     const val MAIN = "main"
     const val HISTORY = "history"
     const val CHARGE = "charge"
@@ -22,8 +24,16 @@ object Routes {
 fun AppNavGraph(navController: NavHostController) {
     NavHost(
         navController = navController,
-        startDestination = Routes.MAIN
+        startDestination = Routes.PASSWORD
     ) {
+        composable(Routes.PASSWORD) { 
+            PasswordScreen(
+                navController = navController,
+                onPasswordSet = { password ->
+                    // 密碼設定成功的回調
+                }
+            ) 
+        }
         composable(Routes.MAIN) { MainScreen(navController) }
         composable(Routes.HISTORY) { HistoryScreen(navController) }
         composable(Routes.CHARGE) { ChargeScreen(navController) }
