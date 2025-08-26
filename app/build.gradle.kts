@@ -1,9 +1,10 @@
 plugins {
-    alias(libs.plugins.android.application)
-    alias(libs.plugins.kotlin.android)
-    alias(libs.plugins.kotlin.compose)
-    id("kotlin-kapt") // 新增：Room 用的編譯器插件
+    id("com.android.application") version "8.6.0"
+    id("org.jetbrains.kotlin.android") version "1.9.24"
+    id("org.jetbrains.kotlin.plugin.compose") version "2.0.0"
+    id("org.jetbrains.kotlin.kapt") version "1.9.24"
 }
+
 
 android {
     namespace = "com.example.appenergytracker"
