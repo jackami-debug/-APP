@@ -13,12 +13,16 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -27,6 +31,9 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.core.graphics.drawable.toBitmap
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -34,6 +41,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import com.example.appenergytracker.model.GoodHabitApp
 import com.example.appenergytracker.ui.screens.components.GoodHabitAppItem
 import com.example.appenergytracker.viewmodel.GoodHabitViewModel
+import com.example.appenergytracker.util.PasswordManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -54,6 +62,10 @@ fun SettingScreen() {
     // 隱藏進階按鈕的解鎖狀態
     var showAdvancedButtons by rememberSaveable { mutableStateOf(false) }
     var secretTapCount by remember { mutableStateOf(0) }
+    
+    // 密碼設定相關狀態
+    var showPasswordDialog by remember { mutableStateOf(false) }
+    var showClearPasswordDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(secretTapCount) {
         if (secretTapCount >= 5) {
@@ -98,6 +110,48 @@ fun SettingScreen() {
                 }
             }
             
+            // 設定密碼按鈕
+            val context = LocalContext.current
+            val passwordManager = PasswordManager.getInstance(context)
+            val hasPasswordSet = passwordManager.hasPassword()
+            
+            Button(
+                onClick = { showPasswordDialog = true },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = if (hasPasswordSet) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.primary
+                )
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Lock,
+                    contentDescription = null
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(if (hasPasswordSet) "修改密碼" else "設定密碼")
+            }
+            
+            // 清除密碼按鈕（僅在已設定密碼時顯示）
+            if (hasPasswordSet) {
+                Button(
+                    onClick = { showClearPasswordDialog = true },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.error
+                    )
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Clear,
+                        contentDescription = null
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("清除密碼")
+                }
+            }
+            
             if (showAdvancedButtons) {
                 // 清除歷史記錄按鈕
                 Button(
@@ -109,7 +163,7 @@ fun SettingScreen() {
                     },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(16.dp),
+                        .padding(horizontal = 16.dp),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = MaterialTheme.colorScheme.error
                     )
@@ -124,7 +178,6 @@ fun SettingScreen() {
             }
             
             // 重置鎖定狀態按鈕
-            val context = LocalContext.current
             if (showAdvancedButtons) {
                 Button(
                     onClick = {
@@ -208,7 +261,182 @@ fun SettingScreen() {
                 1 -> GoodHabitAppSection(snackbarHostState = snackbarHostState)
             }
         }
+        
+        // 密碼設定對話框
+        if (showPasswordDialog) {
+            val context = LocalContext.current
+            val passwordManager = PasswordManager.getInstance(context)
+            
+            PasswordSettingDialog(
+                onDismiss = { showPasswordDialog = false },
+                onPasswordSet = { password ->
+                    val success = passwordManager.setPassword(password)
+                    scope.launch {
+                        if (success) {
+                            snackbarHostState.showSnackbar("密碼設定成功")
+                        } else {
+                            snackbarHostState.showSnackbar("密碼設定失敗，請重試")
+                        }
+                    }
+                    showPasswordDialog = false
+                }
+            )
+        }
+        
+        // 清除密碼確認對話框
+        if (showClearPasswordDialog) {
+            val context = LocalContext.current
+            val passwordManager = PasswordManager.getInstance(context)
+            
+            AlertDialog(
+                onDismissRequest = { showClearPasswordDialog = false },
+                title = { Text("清除密碼") },
+                text = { Text("確定要清除已設定的密碼嗎？此操作無法復原。") },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            val success = passwordManager.clearPassword()
+                            scope.launch {
+                                if (success) {
+                                    snackbarHostState.showSnackbar("密碼已清除")
+                                } else {
+                                    snackbarHostState.showSnackbar("清除密碼失敗，請重試")
+                                }
+                            }
+                            showClearPasswordDialog = false
+                        }
+                    ) {
+                        Text("確定")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showClearPasswordDialog = false }) {
+                        Text("取消")
+                    }
+                }
+            )
+        }
     }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun PasswordSettingDialog(
+    onDismiss: () -> Unit,
+    onPasswordSet: (String) -> Unit
+) {
+    var password by remember { mutableStateOf("") }
+    var confirmPassword by remember { mutableStateOf("") }
+    var showPassword by remember { mutableStateOf(false) }
+    var showConfirmPassword by remember { mutableStateOf(false) }
+    var errorMessage by remember { mutableStateOf("") }
+    
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("設定密碼") },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 8.dp)
+            ) {
+                Text(
+                    text = "請設定6位數字密碼",
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.padding(bottom = 16.dp)
+                )
+                
+                // 密碼輸入框
+                OutlinedTextField(
+                    value = password,
+                    onValueChange = { 
+                        if (it.length <= 6 && it.all { char -> char.isDigit() }) {
+                            password = it
+                            errorMessage = ""
+                        }
+                    },
+                    label = { Text("密碼") },
+                    placeholder = { Text("請輸入6位數字") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+                    visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
+                    trailingIcon = {
+                        IconButton(onClick = { showPassword = !showPassword }) {
+                            Icon(
+                                imageVector = if (showPassword) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                contentDescription = if (showPassword) "隱藏密碼" else "顯示密碼"
+                            )
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    isError = errorMessage.isNotEmpty()
+                )
+                
+                Spacer(modifier = Modifier.height(16.dp))
+                
+                // 確認密碼輸入框
+                OutlinedTextField(
+                    value = confirmPassword,
+                    onValueChange = { 
+                        if (it.length <= 6 && it.all { char -> char.isDigit() }) {
+                            confirmPassword = it
+                            errorMessage = ""
+                        }
+                    },
+                    label = { Text("確認密碼") },
+                    placeholder = { Text("請再次輸入密碼") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+                    visualTransformation = if (showConfirmPassword) VisualTransformation.None else PasswordVisualTransformation(),
+                    trailingIcon = {
+                        IconButton(onClick = { showConfirmPassword = !showConfirmPassword }) {
+                            Icon(
+                                imageVector = if (showConfirmPassword) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                contentDescription = if (showConfirmPassword) "隱藏密碼" else "顯示密碼"
+                            )
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    isError = errorMessage.isNotEmpty()
+                )
+                
+                if (errorMessage.isNotEmpty()) {
+                    Text(
+                        text = errorMessage,
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(top = 8.dp)
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    when {
+                        password.length != 6 -> {
+                            errorMessage = "密碼必須是6位數字"
+                        }
+                        confirmPassword.length != 6 -> {
+                            errorMessage = "確認密碼必須是6位數字"
+                        }
+                        password != confirmPassword -> {
+                            errorMessage = "兩次輸入的密碼不一致"
+                        }
+                        else -> {
+                            onPasswordSet(password)
+                        }
+                    }
+                },
+                enabled = password.isNotEmpty() && confirmPassword.isNotEmpty()
+            ) {
+                Text("確定")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("取消")
+            }
+        }
+    )
 }
 
 @Composable
@@ -672,4 +900,93 @@ private suspend fun rescanAndReload(
 private fun currentTimeText(): String {
     val fmt = SimpleDateFormat("HH:mm:ss", Locale.TAIWAN)
     return fmt.format(System.currentTimeMillis())
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun PasswordVerificationDialog(
+    onDismiss: () -> Unit,
+    onPasswordVerified: () -> Unit
+) {
+    var password by remember { mutableStateOf("") }
+    var showPassword by remember { mutableStateOf(false) }
+    var errorMessage by remember { mutableStateOf("") }
+    val context = LocalContext.current
+    val passwordManager = PasswordManager.getInstance(context)
+    
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("驗證密碼") },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 8.dp)
+            ) {
+                Text(
+                    text = "請輸入6位數字密碼",
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.padding(bottom = 16.dp)
+                )
+                
+                OutlinedTextField(
+                    value = password,
+                    onValueChange = { 
+                        if (it.length <= 6 && it.all { char -> char.isDigit() }) {
+                            password = it
+                            errorMessage = ""
+                        }
+                    },
+                    label = { Text("密碼") },
+                    placeholder = { Text("請輸入6位數字") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+                    visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
+                    trailingIcon = {
+                        IconButton(onClick = { showPassword = !showPassword }) {
+                            Icon(
+                                imageVector = if (showPassword) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                contentDescription = if (showPassword) "隱藏密碼" else "顯示密碼"
+                            )
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    isError = errorMessage.isNotEmpty()
+                )
+                
+                if (errorMessage.isNotEmpty()) {
+                    Text(
+                        text = errorMessage,
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(top = 8.dp)
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    when {
+                        password.length != 6 -> {
+                            errorMessage = "密碼必須是6位數字"
+                        }
+                        !passwordManager.verifyPassword(password) -> {
+                            errorMessage = "密碼錯誤"
+                        }
+                        else -> {
+                            onPasswordVerified()
+                        }
+                    }
+                },
+                enabled = password.isNotEmpty()
+            ) {
+                Text("確定")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("取消")
+            }
+        }
+    )
 }
