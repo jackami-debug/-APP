@@ -238,7 +238,7 @@ fun ChargeScreen(navController: NavController) {
             OutlinedTextField(
                 value = ratioText,
                 onValueChange = { ratioText = it },
-                label = { Text("每分鐘換多少能量") },
+                label = { Text("每分鐘獲取多少能量") },
                 singleLine = true
             )
 

@@ -79,7 +79,7 @@ fun GoodHabitAppItem(
                                 onRatioChange(newRatio)
                             }
                         },
-                        label = { Text("轉換比例") },
+                        label = { Text("每分鐘獲取多少能量") },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         modifier = Modifier.fillMaxWidth()
                     )
