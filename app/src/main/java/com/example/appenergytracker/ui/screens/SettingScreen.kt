@@ -66,6 +66,7 @@ fun SettingScreen() {
     // 密碼設定相關狀態
     var showPasswordDialog by remember { mutableStateOf(false) }
     var showClearPasswordDialog by remember { mutableStateOf(false) }
+    var showPasswordVerificationDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(secretTapCount) {
         if (secretTapCount >= 5) {
@@ -116,7 +117,13 @@ fun SettingScreen() {
             val hasPasswordSet = passwordManager.hasPassword()
             
             Button(
-                onClick = { showPasswordDialog = true },
+                onClick = { 
+                    if (hasPasswordSet) {
+                        showPasswordVerificationDialog = true
+                    } else {
+                        showPasswordDialog = true
+                    }
+                },
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(16.dp),
@@ -132,8 +139,8 @@ fun SettingScreen() {
                 Text(if (hasPasswordSet) "修改密碼" else "設定密碼")
             }
             
-            // 清除密碼按鈕（僅在已設定密碼時顯示）
-            if (hasPasswordSet) {
+            // 清除密碼按鈕（僅在已設定密碼且解鎖進階功能時顯示）
+            if (hasPasswordSet && showAdvancedButtons) {
                 Button(
                     onClick = { showClearPasswordDialog = true },
                     modifier = Modifier
@@ -266,6 +273,7 @@ fun SettingScreen() {
         if (showPasswordDialog) {
             val context = LocalContext.current
             val passwordManager = PasswordManager.getInstance(context)
+            val hasPasswordSet = passwordManager.hasPassword()
             
             PasswordSettingDialog(
                 onDismiss = { showPasswordDialog = false },
@@ -273,12 +281,27 @@ fun SettingScreen() {
                     val success = passwordManager.setPassword(password)
                     scope.launch {
                         if (success) {
-                            snackbarHostState.showSnackbar("密碼設定成功")
+                            snackbarHostState.showSnackbar(if (hasPasswordSet) "密碼修改成功" else "密碼設定成功")
                         } else {
                             snackbarHostState.showSnackbar("密碼設定失敗，請重試")
                         }
                     }
                     showPasswordDialog = false
+                },
+                isModifying = hasPasswordSet
+            )
+        }
+        
+        // 密碼驗證對話框（修改密碼時使用）
+        if (showPasswordVerificationDialog) {
+            val context = LocalContext.current
+            val passwordManager = PasswordManager.getInstance(context)
+            
+            PasswordVerificationDialog(
+                onDismiss = { showPasswordVerificationDialog = false },
+                onPasswordVerified = {
+                    showPasswordVerificationDialog = false
+                    showPasswordDialog = true
                 }
             )
         }
@@ -323,7 +346,8 @@ fun SettingScreen() {
 @Composable
 private fun PasswordSettingDialog(
     onDismiss: () -> Unit,
-    onPasswordSet: (String) -> Unit
+    onPasswordSet: (String) -> Unit,
+    isModifying: Boolean = false
 ) {
     var password by remember { mutableStateOf("") }
     var confirmPassword by remember { mutableStateOf("") }
@@ -333,7 +357,7 @@ private fun PasswordSettingDialog(
     
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("設定密碼") },
+        title = { Text(if (isModifying) "設定新密碼" else "設定密碼") },
         text = {
             Column(
                 modifier = Modifier
@@ -341,7 +365,7 @@ private fun PasswordSettingDialog(
                     .padding(vertical = 8.dp)
             ) {
                 Text(
-                    text = "請設定6位數字密碼",
+                    text = if (isModifying) "請設定新的6位數字密碼" else "請設定6位數字密碼",
                     style = MaterialTheme.typography.bodyMedium,
                     modifier = Modifier.padding(bottom = 16.dp)
                 )
@@ -355,7 +379,7 @@ private fun PasswordSettingDialog(
                             errorMessage = ""
                         }
                     },
-                    label = { Text("密碼") },
+                    label = { Text(if (isModifying) "新密碼" else "密碼") },
                     placeholder = { Text("請輸入6位數字") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
                     visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
@@ -382,7 +406,7 @@ private fun PasswordSettingDialog(
                             errorMessage = ""
                         }
                     },
-                    label = { Text("確認密碼") },
+                    label = { Text(if (isModifying) "確認新密碼" else "確認密碼") },
                     placeholder = { Text("請再次輸入密碼") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
                     visualTransformation = if (showConfirmPassword) VisualTransformation.None else PasswordVisualTransformation(),
