@@ -25,7 +25,6 @@ import androidx.compose.ui.platform.LocalContext
 import com.example.appenergytracker.data.UsageStatsRepository
 import com.example.appenergytracker.util.UsageAccess
 import com.example.appenergytracker.util.AccessibilityUtils
-import com.example.appenergytracker.util.OverlayUtils
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -133,14 +132,12 @@ fun MainScreen(navController: NavController) {
             // 使用 LaunchedEffect 來定期檢查權限狀態
             var hasUsageAccess by remember { mutableStateOf(false) }
             var hasAccessibilityAccess by remember { mutableStateOf(false) }
-            var hasOverlayAccess by remember { mutableStateOf(false) }
 
             LaunchedEffect(Unit) {
                 while (true) {
                     hasUsageAccess = UsageAccess.hasUsageAccess(context)
                     hasAccessibilityAccess =
                         AccessibilityUtils.isAccessibilityServiceEnabled(context)
-                    hasOverlayAccess = OverlayUtils.isOverlayPermissionGranted(context)
                     delay(1000) // 每秒檢查一次權限狀態
                 }
             }
@@ -207,40 +204,6 @@ fun MainScreen(navController: NavController) {
                         )
                         Button(
                             onClick = { AccessibilityUtils.openAccessibilitySettings(context) },
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF9800))
-                        ) {
-                            Text("前往開啟權限")
-                        }
-                    }
-                }
-            } else if (!hasOverlayAccess) {
-                Card(
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF3E0)),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Column(
-                        modifier = Modifier.padding(16.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Warning,
-                            contentDescription = null,
-                            tint = Color(0xFFFF9800)
-                        )
-                        Text(
-                            text = "需要開啟懸浮視窗權限",
-                            color = Color(0xFFFF9800),
-                            fontWeight = FontWeight.Medium
-                        )
-                        Text(
-                            text = "以顯示能量倒數計時小圖示",
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            fontSize = 12.sp,
-                            textAlign = TextAlign.Center
-                        )
-                        Button(
-                            onClick = { OverlayUtils.openOverlayPermissionSettings(context) },
                             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF9800))
                         ) {
                             Text("前往開啟權限")
