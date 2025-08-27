@@ -20,11 +20,13 @@ import com.example.appenergytracker.service.EnergyStatusNotifier
 import com.example.appenergytracker.viewmodel.EnergyViewModel
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     private val requestNotificationsPermission =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { _ -> }
     private val energyViewModel: EnergyViewModel by viewModels()
+    
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         
@@ -41,6 +43,9 @@ class MainActivity : ComponentActivity() {
             }
         }
         
+        // 立即開始通知監聽
+        startNotificationMonitoring()
+        
         setContent {
             AppEnergyTrackerTheme {
                 Surface(
@@ -56,10 +61,31 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        // 監聽能量狀態並顯示通知；滑除後再次開啟 App 會重新觸發這裡
-        lifecycleScope.launchWhenResumed {
+        // 確保通知監聽正在運行
+        if (!isNotificationMonitoringActive) {
+            startNotificationMonitoring()
+        }
+    }
+    
+    override fun onPause() {
+        super.onPause()
+        // 應用進入背景時保持通知監聽，確保通知持續更新
+        // 不停止監聽，讓通知在背景中也能即時更新
+    }
+    
+    private var isNotificationMonitoringActive = false
+    
+    private fun startNotificationMonitoring() {
+        if (isNotificationMonitoringActive) return
+        
+        isNotificationMonitoringActive = true
+        android.util.Log.d("MainActivity", "開始通知監聽")
+        
+        // 在協程中監聽能量變化並即時更新通知
+        lifecycleScope.launch {
             energyViewModel.currentEnergyMinutes.collectLatest { current ->
                 val max = energyViewModel.maxEnergyMinutes.value
+                android.util.Log.d("MainActivity", "能量更新: $current/$max，更新通知")
                 EnergyStatusNotifier.show(this@MainActivity, current, max)
             }
         }

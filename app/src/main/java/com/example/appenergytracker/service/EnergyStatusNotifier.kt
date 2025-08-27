@@ -23,6 +23,8 @@ object EnergyStatusNotifier {
             val importance = NotificationManager.IMPORTANCE_LOW
             val channel = NotificationChannel(CHANNEL_ID, CHANNEL_NAME, importance).apply {
                 description = CHANNEL_DESC
+                // 啟用即時更新
+                setShowBadge(true)
             }
             val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             nm.createNotificationChannel(channel)
@@ -45,18 +47,23 @@ object EnergyStatusNotifier {
             PendingIntent.FLAG_IMMUTABLE
         )
 
-        val title = "剩餘能量: ${clampedCurrent} 分鐘"
+        // 根據能量狀態調整標題和顏色
+        val (title, color) = when {
+            clampedCurrent <= 0 -> "能量已歸零！" to ContextCompat.getColor(context, R.color.red_500)
+            clampedCurrent < clampedMax * 0.3 -> "能量偏低: ${clampedCurrent} 分鐘" to ContextCompat.getColor(context, R.color.orange_500)
+            else -> "剩餘能量: ${clampedCurrent} 分鐘" to ContextCompat.getColor(context, R.color.green_500)
+        }
 
         val builder = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_launcher_foreground)
             .setContentTitle(title)
-            .setOnlyAlertOnce(true)
+            .setOnlyAlertOnce(false) // 允許即時更新
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setAutoCancel(false)
-            .setOngoing(false)
+            .setOngoing(true) // 設為持續通知，避免被滑除
             .setContentIntent(pendingIntent)
             .setProgress(clampedMax, clampedCurrent, false)
-            .setColor(ContextCompat.getColor(context, R.color.purple_500))
+            .setColor(color)
             .setColorized(true)
             .setShowWhen(false)
             .setSilent(true)

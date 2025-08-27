@@ -171,6 +171,33 @@ class EnergyMonitorService(private val context: Context) {
                 
                 // 每分鐘扣除一次能量（確保精確的1:1比例）
                 checkAndDeductEnergy(currentApp)
+            } else {
+                // 每秒檢查一次好習慣 App 的能量累積（支援小數比例）
+                checkGoodHabitEnergyAccumulation(currentApp)
+            }
+        }
+    }
+    
+    // 新增：每秒檢查好習慣 App 的能量累積
+    private suspend fun checkGoodHabitEnergyAccumulation(packageName: String) {
+        val habitApp = packageToHabitCache.value[packageName]
+        
+        if (habitApp?.isGoodHabit == true) {
+            // 好習慣：每秒累積小數能量
+            val ratio = habitApp.ratio.toDouble()
+            val secondsRatio = ratio / 60.0 // 將每分鐘比例轉換為每秒比例
+            val residue = (goodHabitEnergyResidue[packageName] ?: 0.0) + secondsRatio
+            val gain = kotlin.math.floor(residue).toInt()
+            goodHabitEnergyResidue[packageName] = residue - gain
+
+            if (gain > 0) {
+                val currentEnergyValue = _currentEnergy.value
+                val newEnergy = minOf(MAX_ENERGY, currentEnergyValue + gain)
+                _currentEnergy.value = newEnergy
+                android.util.Log.d(
+                    "EnergyMonitor",
+                    "好習慣 App 即時增加能量: $packageName, 增加: $gain, 當前能量: $newEnergy"
+                )
             }
         }
     }

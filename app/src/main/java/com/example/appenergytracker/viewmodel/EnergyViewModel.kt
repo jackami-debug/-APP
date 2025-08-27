@@ -43,6 +43,7 @@ class EnergyViewModel(application: Application) : AndroidViewModel(application) 
     private fun initializeEnergyMonitoring() {
         // 監聽自動監控服務的能量變化（主要資料來源）
         energyMonitorService.currentEnergy.onEach { energy ->
+            android.util.Log.d("EnergyViewModel", "收到能量更新: $energy")
             _currentEnergyMinutes.value = energy
         }.launchIn(viewModelScope)
         
