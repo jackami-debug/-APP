@@ -14,7 +14,7 @@ interface GoodHabitDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAll(apps: List<GoodHabitApp>)
 
-    @Update
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun updateApp(app: GoodHabitApp)
 
     @Query("DELETE FROM GoodHabitApp")

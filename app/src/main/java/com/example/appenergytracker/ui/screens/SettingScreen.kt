@@ -697,6 +697,10 @@ private fun BadHabitAppSection(
     var searchQuery by remember { mutableStateOf(TextFieldValue("")) }
     var lastUpdated by remember { mutableStateOf("—") }
     var isRescanning by remember { mutableStateOf(false) } // 重新掃描狀態
+    
+    // 壞習慣移除確認對話框狀態
+    var showRemoveBadHabitDialog by remember { mutableStateOf(false) }
+    var appToRemove by remember { mutableStateOf<GoodHabitApp?>(null) }
 
     LaunchedEffect(goodHabitApps) {
         withContext(Dispatchers.IO) {
@@ -856,12 +860,23 @@ private fun BadHabitAppSection(
                     },
                     isSelected = app.isBadHabit,
                     onToggle = { isOn ->
-                        // ON → 設為壞習慣（isBadHabit = true, isGoodHabit = false）；
-                        // OFF → 非壞習慣（isBadHabit = false），不自動轉為好習慣
-                        viewModel.updateApp(app.copy(
-                            isGoodHabit = if (isOn) false else app.isGoodHabit,
-                            isBadHabit = isOn
-                        ))
+                        if (isOn) {
+                            // 設為壞習慣（isBadHabit = true, isGoodHabit = false）
+                            scope.launch {
+                                try {
+                                    viewModel.updateApp(app.copy(
+                                        isGoodHabit = false,
+                                        isBadHabit = true
+                                    ))
+                                } catch (e: Exception) {
+                                    snackbarHostState.showSnackbar("設定失敗：${e.message}")
+                                }
+                            }
+                        } else {
+                            // 準備移除壞習慣標記，顯示確認對話框
+                            appToRemove = app
+                            showRemoveBadHabitDialog = true
+                        }
                     },
                     onRatioChange = { newRatio ->
                         viewModel.updateApp(app.copy(ratio = newRatio))
@@ -870,6 +885,54 @@ private fun BadHabitAppSection(
                     showRatioField = false
                 )
             }
+        }
+        
+        // 壞習慣移除確認對話框
+        if (showRemoveBadHabitDialog && appToRemove != null) {
+            val app = appToRemove!! // 安全地獲取 app 引用
+            AlertDialog(
+                onDismissRequest = { 
+                    showRemoveBadHabitDialog = false
+                    appToRemove = null
+                },
+                title = { Text("移除壞習慣 App") },
+                text = { 
+                    Text("確定要將「${app.name}」從壞習慣 App 清單中移除嗎？\n\n移除後，該 App 將不再被視為壞習慣，但也不會自動加入好習慣清單。")
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            // 立即關閉對話框
+                            showRemoveBadHabitDialog = false
+                            appToRemove = null
+                            
+                            // 執行移除操作
+                            scope.launch {
+                                try {
+                                    viewModel.updateApp(app.copy(
+                                        isBadHabit = false
+                                    ))
+                                    snackbarHostState.showSnackbar("已將「${app.name}」從壞習慣清單中移除")
+                                } catch (e: Exception) {
+                                    snackbarHostState.showSnackbar("移除失敗：${e.message}")
+                                }
+                            }
+                        }
+                    ) {
+                        Text("確定移除")
+                    }
+                },
+                dismissButton = {
+                    TextButton(
+                        onClick = { 
+                            showRemoveBadHabitDialog = false
+                            appToRemove = null
+                        }
+                    ) {
+                        Text("取消")
+                    }
+                }
+            )
         }
     }
 }

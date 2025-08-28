@@ -29,7 +29,12 @@ class GoodHabitViewModel(application: Application) : AndroidViewModel(applicatio
 
     fun updateApp(app: GoodHabitApp) {
         viewModelScope.launch {
-            goodHabitDao.updateApp(app)
+            try {
+                goodHabitDao.updateApp(app)
+            } catch (e: Exception) {
+                android.util.Log.e("GoodHabitViewModel", "更新 App 失敗: ${app.packageName}", e)
+                throw e // 重新拋出異常，讓 UI 層處理
+            }
         }
     }
 
