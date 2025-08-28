@@ -111,32 +111,34 @@ fun SettingScreen() {
                 }
             }
             
-            // 設定密碼按鈕
+            // 設定密碼按鈕（僅在解鎖進階功能時顯示）
             val context = LocalContext.current
             val passwordManager = PasswordManager.getInstance(context)
             val hasPasswordSet = passwordManager.hasPassword()
             
-            Button(
-                onClick = { 
-                    if (hasPasswordSet) {
-                        showPasswordVerificationDialog = true
-                    } else {
-                        showPasswordDialog = true
-                    }
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = if (hasPasswordSet) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.primary
-                )
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Lock,
-                    contentDescription = null
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(if (hasPasswordSet) "修改密碼" else "設定密碼")
+            if (showAdvancedButtons) {
+                Button(
+                    onClick = { 
+                        if (hasPasswordSet) {
+                            showPasswordVerificationDialog = true
+                        } else {
+                            showPasswordDialog = true
+                        }
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (hasPasswordSet) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.primary
+                    )
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Lock,
+                        contentDescription = null
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(if (hasPasswordSet) "修改密碼" else "設定密碼")
+                }
             }
             
             // 清除密碼按鈕（僅在已設定密碼且解鎖進階功能時顯示）
